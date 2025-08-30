@@ -1,95 +1,84 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.cluster import OPTICS, DBSCAN
-import matplotlib.pyplot as plt
+from sklearn.cluster import OPTICS
+from Bio import SeqIO
 
-# -----------------------------
-# Helper Functions
-# -----------------------------
+# -------------------------------
+# Function to parse FASTA
+# -------------------------------
+def parse_fasta(file, k=3):
+    """Convert fasta sequences into simple k-mer frequency vectors."""
+    sequences = []
+    ids = []
 
-def load_embeddings(file):
-    """
-    Load embeddings from a CSV/TSV file.
-    Assumes first column is ID and rest are embedding values.
-    """
-    try:
-        df = pd.read_csv(file)
-    except Exception:
-        df = pd.read_csv(file, sep="\t")
+    for record in SeqIO.parse(file, "fasta"):
+        seq = str(record.seq).upper()
+        ids.append(record.id)
+        sequences.append(seq)
 
-    # Separate IDs and embedding matrix
-    ids = df.iloc[:, 0].values
-    Z = df.iloc[:, 1:].values
-    return ids, Z
+    # Generate k-mers
+    from itertools import product
+    kmers = ["".join(p) for p in product("ACGT", repeat=k)]
+
+    # Convert sequences into feature vectors
+    features = []
+    for seq in sequences:
+        vec = []
+        for kmer in kmers:
+            vec.append(seq.count(kmer))
+        features.append(vec)
+
+    df = pd.DataFrame(features, columns=kmers, index=ids)
+    return df
 
 
-def cluster_embeddings(Z, method="optics", min_samples=5, xi=0.05, eps=0.5):
-    """
-    Cluster embeddings using OPTICS or DBSCAN with safe parameter handling.
-    """
-    n_samples = Z.shape[0]
-
-    # Fix: Ensure min_samples is not greater than dataset size
-    if min_samples > n_samples:
-        min_samples = max(2, n_samples // 2)
-
+# -------------------------------
+# Clustering function
+# -------------------------------
+def cluster_embeddings(Z, method="optics", min_samples=2, xi=0.05, eps=0.5):
     if method == "optics":
-        model = OPTICS(min_samples=min_samples, xi=xi)
-    elif method == "dbscan":
-        model = DBSCAN(min_samples=min_samples, eps=eps)
+        model = OPTICS(min_samples=min_samples, xi=xi, max_eps=eps)
+        return model.fit_predict(Z)
     else:
-        raise ValueError(f"Unknown clustering method: {method}")
-
-    labels = model.fit_predict(Z)
-    return labels
+        raise ValueError("Unsupported clustering method")
 
 
-def plot_clusters(Z, labels):
-    """
-    Plot 2D scatter plot of clusters (first 2 dimensions).
-    """
-    plt.figure(figsize=(8, 6))
-    scatter = plt.scatter(Z[:, 0], Z[:, 1], c=labels, cmap="tab20", s=50)
-    plt.colorbar(scatter, label="Cluster ID")
-    plt.title("Clustering of Embeddings")
-    st.pyplot(plt)
+# -------------------------------
+# Streamlit UI
+# -------------------------------
+st.title("🧬 eDNA Clustering App with FASTA Support")
 
+uploaded_file = st.file_uploader("Upload a CSV, TSV, or FASTA file", type=["csv", "tsv", "fasta", "fa"])
 
-# -----------------------------
-# Streamlit App UI
-# -----------------------------
-
-st.title("🧬 eDNA Clustering App")
-st.markdown("Upload your embedding dataset (CSV/TSV) and cluster sequences.")
-
-uploaded_file = st.file_uploader("Upload Embeddings File", type=["csv", "tsv"])
+min_samples = st.slider("Minimum Samples", min_value=2, max_value=100, value=5, step=1)
+xi = st.slider("Xi (for OPTICS)", min_value=0.01, max_value=0.5, value=0.05, step=0.01)
+eps = st.slider("Max Eps", min_value=0.1, max_value=10.0, value=2.0, step=0.1)
 
 if uploaded_file:
-    ids, Z = load_embeddings(uploaded_file)
-    st.success(f"✅ Loaded {len(ids)} embeddings with {Z.shape[1]} features.")
+    filename = uploaded_file.name.lower()
 
-    st.sidebar.header("Clustering Settings")
-    method = st.sidebar.selectbox("Clustering Method", ["optics", "dbscan"])
+    if filename.endswith((".csv", ".tsv")):
+        sep = "," if filename.endswith(".csv") else "\t"
+        df = pd.read_csv(uploaded_file, sep=sep)
+        st.write("📄 Data Preview:", df.head())
+        Z = df.values
 
-    if method == "optics":
-        min_samples = st.sidebar.slider("min_samples", 2, 50, 5)
-        xi = st.sidebar.slider("xi (OPTICS)", 0.01, 0.5, 0.05)
-        labels = cluster_embeddings(Z, method="optics", min_samples=min_samples, xi=xi)
+    elif filename.endswith((".fasta", ".fa")):
+        df = parse_fasta(uploaded_file, k=3)
+        st.write("🧬 Parsed FASTA to k-mer matrix:", df.head())
+        Z = df.values
+
     else:
-        min_samples = st.sidebar.slider("min_samples", 2, 50, 5)
-        eps = st.sidebar.slider("eps (DBSCAN)", 0.1, 5.0, 0.5)
-        labels = cluster_embeddings(Z, method="dbscan", min_samples=min_samples, eps=eps)
+        st.error("Unsupported file type")
+        st.stop()
 
-    # Show results
-    st.subheader("📊 Clustering Results")
-    result_df = pd.DataFrame({"ID": ids, "Cluster": labels})
-    st.dataframe(result_df)
+    # Run clustering
+    try:
+        labels = cluster_embeddings(Z, method="optics", min_samples=min_samples, xi=xi, eps=eps)
+        df["Cluster"] = labels
+        st.success("✅ Clustering complete!")
+        st.write(df)
 
-    # Plot
-    st.subheader("📈 Cluster Visualization")
-    plot_clusters(Z, labels)
-
-    # Option to download results
-    st.download_button("Download Cluster Results", result_df.to_csv(index=False).encode("utf-8"),
-                       "clusters.csv", "text/csv")
+    except ValueError as e:
+        st.error(f"Error: {e}")
