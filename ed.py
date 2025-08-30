@@ -86,8 +86,13 @@ def encode_with_autoencoder_or_pca(X: np.ndarray, latent_dim: int=64, use_pca_on
     return Z
 
 def cluster_embeddings(Z: np.ndarray, method: str="optics", min_samples: int=10, xi: float=0.05, eps: float=0.5):
-    if Z.shape[0] == 0:
+    n_samples = Z.shape[0]
+    if n_samples == 0:
         return np.array([], dtype=int)
+
+    # 🔧 Fix: ensure min_samples <= n_samples
+    min_samples = min(int(min_samples), n_samples)
+
     if method == "optics":
         m = OPTICS(min_samples=min_samples, xi=xi, metric="euclidean")
         labels = m.fit_predict(Z)
@@ -95,6 +100,7 @@ def cluster_embeddings(Z: np.ndarray, method: str="optics", min_samples: int=10,
         m = DBSCAN(eps=eps, min_samples=min_samples, n_jobs=-1)
         labels = m.fit_predict(Z)
     return labels
+
 
 def summarize_abundance(sample_ids: List[str], seq_ids: List[str], clusters: np.ndarray) -> pd.DataFrame:
     rows = pd.DataFrame({"sample_id": sample_ids, "seq_id": seq_ids, "cluster": clusters})
