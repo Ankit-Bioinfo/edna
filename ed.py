@@ -9,12 +9,12 @@ import matplotlib.pyplot as plt
 
 # Streamlit page setup
 st.set_page_config(page_title="AI eDNA Analysis", layout="wide")
-st.title("Functional AI-based eDNA Analysis Pipeline")
+st.title("AI-based eDNA Analysis Pipeline")
 
 # Upload FASTA/FASTQ file
 uploaded_file = st.file_uploader("Upload FASTA/FASTQ file", type=['fasta', 'fastq'])
 
-# k-mer size slider
+# k-mer size selection
 k = st.slider("Select k-mer size", min_value=3, max_value=8, value=4)
 
 # Function to generate k-mers
@@ -22,9 +22,7 @@ def generate_kmers(sequence, k):
     return [sequence[i:i+k] for i in range(len(sequence)-k+1)]
 
 if uploaded_file:
-    st.info("Reading sequences from uploaded file...")
-    
-    # Load sequences
+    st.info("Reading sequences...")
     try:
         sequences = [str(record.seq) for record in SeqIO.parse(uploaded_file, "fastq")]
         if not sequences:
@@ -42,17 +40,17 @@ if uploaded_file:
     # Convert sequences to k-mers
     kmers_list = [" ".join(generate_kmers(seq, k)) for seq in sequences]
     
-    # Vectorize k-mers
-    st.info("Vectorizing sequences with CountVectorizer...")
+    # Vectorize sequences
+    st.info("Vectorizing sequences...")
     vectorizer = CountVectorizer()
     X = vectorizer.fit_transform(kmers_list)
     
-    # Dimensionality reduction with UMAP
+    # UMAP dimensionality reduction
     st.info("Reducing dimensions with UMAP...")
     reducer = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='euclidean', random_state=42)
     X_reduced = reducer.fit_transform(X.toarray())
     
-    # Clustering sequences with HDBSCAN
+    # HDBSCAN clustering
     st.info("Clustering sequences with HDBSCAN...")
     clusterer = hdbscan.HDBSCAN(min_cluster_size=2)
     labels = clusterer.fit_predict(X_reduced)
@@ -68,7 +66,7 @@ if uploaded_file:
     # Cluster summary table
     df_summary = pd.DataFrame({'Sequence': sequences, 'Cluster': labels})
     cluster_counts = df_summary['Cluster'].value_counts().reset_index()
-    cluster_counts.columns = ['Cluster', 'Count']
+    cluster_counts.columns = ['Cluster', 'Count']  # Corrected
     st.subheader("Cluster Summary")
     st.dataframe(cluster_counts)
     
