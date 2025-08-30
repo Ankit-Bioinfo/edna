@@ -9,4 +9,4 @@ streamlit
 requests
 tqdm
 hdbscan
-umap
+umap-learn
