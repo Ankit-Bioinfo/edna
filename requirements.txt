@@ -1,20 +1,7 @@
-# Core
-numpy
-pandas
-scipy
-
-# Machine Learning
-scikit-learn
-
-# Bioinformatics
-biopython
-
-# Visualization
-matplotlib
-plotly
-
-# App UI
-streamlit
-
-# Utilities
-tqdm
+numpy>=1.23
+pandas>=1.5
+biopython>=1.80
+scikit-learn>=1.2
+matplotlib>=3.7
+plotly>=5.15
+streamlit>=1.26
