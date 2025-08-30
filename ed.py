@@ -29,6 +29,7 @@ from typing import List, Tuple, Optional, Dict
 
 import numpy as np
 import pandas as pd
+import streamlit as st
 from Bio import SeqIO
 from Bio.Blast import NCBIWWW, NCBIXML  # remote fallback
 from itertools import product
