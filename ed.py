@@ -4,14 +4,12 @@ import pandas as pd
 from Bio import SeqIO
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
 import umap
 import hdbscan
 import matplotlib.pyplot as plt
-import numpy as np
 
 st.set_page_config(page_title="AI eDNA Analysis", layout="wide")
-st.title("AI-based eDNA Analysis Pipeline with Species Prediction")
+st.title("AI-based eDNA Analysis Pipeline")
 
 # Upload FASTA/FASTQ file
 uploaded_file = st.file_uploader("Upload FASTA/FASTQ file", type=['fasta', 'fastq'])
@@ -23,9 +21,8 @@ k = st.slider("Select k-mer size", 3, 8, 4)
 def generate_kmers(sequence, k):
     return [sequence[i:i+k] for i in range(len(sequence)-k+1)]
 
-# Placeholder for training a dummy species classifier
-def train_dummy_classifier():
-    # Example: small fake dataset of sequences for demo purposes
+# Dummy classifier for known species (replace with real model later)
+def train_dummy_classifier(k):
     sequences = ["ATGCGT", "CGTATG", "TTGCAA", "AATTGC", "GGCCAA"]
     labels = ["Species_A", "Species_A", "Species_B", "Species_B", "Species_C"]
     kmers_list = [" ".join(generate_kmers(seq, k)) for seq in sequences]
@@ -35,8 +32,7 @@ def train_dummy_classifier():
     clf.fit(X, labels)
     return clf, vectorizer
 
-# Train dummy classifier (replace with real trained model for real data)
-classifier, vectorizer = train_dummy_classifier()
+classifier, vectorizer = train_dummy_classifier(k)
 
 if uploaded_file:
     st.info("Reading sequences...")
@@ -54,28 +50,27 @@ if uploaded_file:
     # Convert sequences to k-mers
     kmers_list = [" ".join(generate_kmers(seq, k)) for seq in sequences]
     
-    st.info("Vectorizing sequences...")
-    X_input = vectorizer.transform(kmers_list)  # Use same vectorizer as classifier
+    # Vectorize sequences
+    X_input = vectorizer.transform(kmers_list)
     
     # Predict known species
     st.info("Predicting known species...")
     predictions = classifier.predict(X_input)
-    
-    st.subheader("Predicted Species")
     df_pred = pd.DataFrame({'Sequence': sequences, 'Predicted_Species': predictions})
+    st.subheader("Predicted Species")
     st.dataframe(df_pred)
     
-    # Dimensionality reduction
-    st.info("Reducing dimensions with UMAP for clustering unknown sequences...")
+    # Dimensionality reduction with UMAP
+    st.info("Reducing dimensions with UMAP...")
     reducer = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='euclidean', random_state=42)
     X_reduced = reducer.fit_transform(X_input.toarray())
     
-    # Clustering
+    # Clustering with HDBSCAN
     st.info("Clustering sequences with HDBSCAN...")
     clusterer = hdbscan.HDBSCAN(min_cluster_size=2)
     labels = clusterer.fit_predict(X_reduced)
     
-    # UMAP scatter plot
+    # Plot UMAP clusters
     st.subheader("UMAP Clustering of Sequences")
     fig, ax = plt.subplots()
     scatter = ax.scatter(X_reduced[:,0], X_reduced[:,1], c=labels, cmap='Spectral', s=20)
@@ -83,7 +78,7 @@ if uploaded_file:
     ax.add_artist(legend1)
     st.pyplot(fig)
     
-    # Cluster summary
+    # Cluster + species summary
     df_summary = pd.DataFrame({'Cluster': labels, 'Predicted_Species': predictions})
     cluster_counts = df_summary.groupby(['Cluster', 'Predicted_Species']).size().reset_index(name='Count')
     st.subheader("Cluster and Species Summary")
