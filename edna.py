@@ -3,22 +3,11 @@
 
 # === requirements.txt ===
 # requirements.txt
-numpy>=1.23
-pandas>=1.5
-scikit-learn>=1.1
-biopython>=1.81
-torch>=2.0; platform_system!="Windows"
-torchvision>=0.15; platform_system!="Windows"
-streamlit>=1.31
-fastapi>=0.110
-uvicorn[standard]>=0.29
+import numpy as np
+import pandas as pd
+import streamlit as st
+from Bio import SeqIO
 
-# === README.md ===
-# README.md
-
-
-# === edna_pipeline/__init__.py ===
-__version__ = "0.1.0"
 
 # === edna_pipeline/io_utils.py ===
 from typing import Iterator, Tuple
