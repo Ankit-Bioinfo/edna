@@ -1,62 +1,85 @@
-# app.py
 import streamlit as st
+import numpy as np
 import pandas as pd
-from Bio import SeqIO
 from sklearn.feature_extraction.text import CountVectorizer
-import umap
-import hdbscan
-import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+from sklearn.cluster import HDBSCAN
+import plotly.express as px
 
-st.set_page_config(page_title="AI eDNA Analysis", layout="wide")
-st.title("AI-based eDNA Analysis Pipeline")
+# -------------------------------
+# Helper Functions
+# -------------------------------
 
-# Upload FASTA or FASTQ file
-uploaded_file = st.file_uploader("Upload FASTA/FASTQ file", type=['fasta', 'fastq'])
+def generate_fake_sequences(n=200, length=100):
+    """Generate mock DNA sequences"""
+    bases = ["A", "T", "G", "C"]
+    return ["".join(np.random.choice(bases, length)) for _ in range(n)]
 
-# k-mer size
-k = st.slider("Select k-mer size", 3, 8, 4)
+def kmer_features(seqs, k=5):
+    """Convert DNA sequences to k-mer count vectors"""
+    vectorizer = CountVectorizer(analyzer='char', ngram_range=(k,k))
+    X = vectorizer.fit_transform(seqs)
+    return X.toarray(), vectorizer.get_feature_names_out()
 
-# Function to generate k-mers from a sequence
-def generate_kmers(sequence, k):
-    return [sequence[i:i+k] for i in range(len(sequence)-k+1)]
+def compute_diversity(labels):
+    """Shannon diversity index & richness"""
+    counts = pd.Series(labels).value_counts()
+    props = counts / counts.sum()
+    shannon = -(props * np.log(props + 1e-9)).sum()  # avoid log(0)
+    richness = counts.count()
+    return shannon, richness
 
-if uploaded_file:
-    st.info("Reading sequences...")
-    
-    # Read sequences from uploaded file
-    sequences = [str(record.seq) for record in SeqIO.parse(uploaded_file, "fastq")]
-    st.success(f"Total sequences loaded: {len(sequences)}")
-    
-    # Convert sequences to k-mers
-    kmers_list = [" ".join(generate_kmers(seq, k)) for seq in sequences]
-    
-    st.info("Vectorizing sequences...")
-    vectorizer = CountVectorizer()
-    X = vectorizer.fit_transform(kmers_list)
-    
-    st.info("Reducing dimensions with UMAP...")
-    reducer = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='euclidean', random_state=42)
-    X_reduced = reducer.fit_transform(X.toarray())
-    
-    st.info("Clustering sequences with HDBSCAN...")
-    clusterer = hdbscan.HDBSCAN(min_cluster_size=5)
-    labels = clusterer.fit_predict(X_reduced)
-    
-    # Plotting UMAP clusters
-    st.subheader("UMAP Clustering of DNA Reads")
-    fig, ax = plt.subplots()
-    scatter = ax.scatter(X_reduced[:,0], X_reduced[:,1], c=labels, cmap='Spectral', s=10)
-    legend1 = ax.legend(*scatter.legend_elements(), title="Clusters")
-    ax.add_artist(legend1)
-    st.pyplot(fig)
-    
-    # Cluster summary table
-    df_summary = pd.DataFrame({'Cluster': labels})
-    cluster_counts = df_summary['Cluster'].value_counts().reset_index()
-    cluster_counts.columns = ['Cluster', 'Count']
-    st.subheader("Cluster Summary")
-    st.dataframe(cluster_counts)
-    
-    # Optionally, download cluster summary
-    csv = cluster_counts.to_csv(index=False)
-    st.download_button("Download Cluster Summary CSV", data=csv, file_name="cluster_summary.csv")
+# -------------------------------
+# Streamlit UI
+# -------------------------------
+st.title("🌊 eDNA Pipeline Prototype")
+st.markdown("""
+Simulated eDNA pipeline: from raw sequences → clustering → biodiversity metrics → visualization.
+""")
+
+# User parameters
+n_seqs = st.sidebar.slider("Number of sequences", 50, 500, 200)
+seq_len = st.sidebar.slider("Sequence length", 50, 200, 100)
+k = st.sidebar.slider("k-mer size", 3, 6, 5)
+
+# Step 1: Generate sequences
+st.subheader("Step 1: Raw Sequences")
+sequences = generate_fake_sequences(n_seqs, seq_len)
+st.write("Example sequences:", sequences[:5])
+
+# Step 2: k-mer embedding
+st.subheader("Step 2: K-mer Embedding")
+X, features = kmer_features(sequences, k=k)
+st.write(f"Feature matrix shape: {X.shape}")
+
+# Step 3: Dimensionality reduction
+st.subheader("Step 3: PCA Dimensionality Reduction")
+pca = PCA(n_components=2)
+X_pca = pca.fit_transform(X)
+
+# Step 4: Clustering (HDBSCAN)
+st.subheader("Step 4: Clustering / Novel Taxa Discovery")
+clusterer = HDBSCAN(min_cluster_size=5)
+labels = clusterer.fit_predict(X)
+st.write(f"Number of clusters detected (excluding noise): {len(set(labels)) - (1 if -1 in labels else 0)}")
+
+# Step 5: Diversity metrics
+st.subheader("Step 5: Biodiversity Metrics")
+shannon, richness = compute_diversity(labels)
+st.metric("Shannon Diversity Index", round(shannon, 3))
+st.metric("Species Richness", richness)
+
+# Step 6: Visualize clusters
+st.subheader("Step 6: Cluster Visualization")
+fig = px.scatter(x=X_pca[:,0], y=X_pca[:,1], color=labels.astype(str),
+                 title="Sequence Clusters (Potential Taxa)")
+st.plotly_chart(fig)
+
+# Step 7: Cluster abundance heatmap
+st.subheader("Step 7: Cluster Abundance Heatmap")
+cluster_counts = pd.Series(labels).value_counts().reset_index()
+cluster_counts.columns = ["Cluster", "Abundance"]
+fig2 = px.bar(cluster_counts, x="Cluster", y="Abundance", title="Cluster Abundance")
+st.plotly_chart(fig2)
+
+st.success("✅ Pipeline prototype complete! You can now plug in real eDNA FASTQ sequences and extend with DADA2/BLAST/AI embeddings.")
