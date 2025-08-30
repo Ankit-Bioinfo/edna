@@ -15,7 +15,7 @@ uvicorn[standard]>=0.29
 
 # === README.md ===
 # README.md
-Edna AI pipeline... (shortened here; full README included in zip)
+
 
 # === edna_pipeline/__init__.py ===
 __version__ = "0.1.0"
