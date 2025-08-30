@@ -23,6 +23,8 @@ def generate_kmers(sequence, k):
 
 if uploaded_file:
     st.info("Reading sequences...")
+    
+    # Load sequences
     try:
         sequences = [str(record.seq) for record in SeqIO.parse(uploaded_file, "fastq")]
         if not sequences:
